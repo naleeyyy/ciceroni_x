@@ -103,8 +103,9 @@ def params_factory(user_id, tweet_id, is_profile=True):
     return params_profile if is_profile else params_tweet
 
 
-async def scrape(session: Session):
-    profiles = await session.exec(select(Profile)).all()
+def scrape(session: Session):
+    print('scraping...')
+    profiles = session.exec(select(Profile)).all()
 
     for profile in profiles:
         params = params_factory(profile.userId, None, True)
@@ -146,9 +147,9 @@ async def scrape(session: Session):
                 post = Post(text=full_text, favorite_count=favorited,
                             retweet_count=repost + comments, created_at=created_at, replies=replies)
 
-                await session.add(post)
+                session.add(post)
 
-                await session.commit()
+                session.commit()
             except:
                 print(None)
     return True
@@ -158,9 +159,7 @@ async def task():
     while True:
         try:
             session = next(get_session())
-            await scrape(session)
-            # with get_session() as session:
-            #     await scrape(session)
+            scrape(session)
         except Exception as e:
             print(f"Task error: {e}")
         finally:
