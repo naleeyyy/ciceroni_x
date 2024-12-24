@@ -26,10 +26,12 @@ class Reply(SQLModel, table=True):
     text: str
 
     postId: int | None = Field(default=None, foreign_key="post.id")
-    post: Post = Relationship(back_populates="team")
+    post: Post = Relationship(back_populates="replies")
 
 
-connection_string = "postgresql://postgres:password@localhost:5432/ciceroni"
+# connection_string = "postgresql://postgres:password@localhost:5432/ciceroni"
+connection_string = "postgresql://postgres:password@88.99.191.92:5432/ciceroni?sslmode=require"
+
 
 engine = create_engine(connection_string)
 
@@ -101,8 +103,8 @@ def params_factory(user_id, tweet_id, is_profile=True):
     return params_profile if is_profile else params_tweet
 
 
-def scrape(session: SessionDep):
-    profiles = session.exec(select(Profile)).all()
+async def scrape(session: Session):
+    profiles = await session.exec(select(Profile)).all()
 
     for profile in profiles:
         params = params_factory(profile.userId, None, True)
@@ -144,17 +146,21 @@ def scrape(session: SessionDep):
                 post = Post(text=full_text, favorite_count=favorited,
                             retweet_count=repost + comments, created_at=created_at, replies=replies)
 
-                session.add(post)
+                await session.add(post)
 
-                session.commit()
+                await session.commit()
             except:
                 print(None)
+    return True
 
 
 async def task():
     while True:
         try:
-            await scrape()
+            session = next(get_session())
+            await scrape(session)
+            # with get_session() as session:
+            #     await scrape(session)
         except Exception as e:
             print(f"Task error: {e}")
         finally:
