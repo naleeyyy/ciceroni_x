@@ -1,5 +1,6 @@
 import asyncio
 import requests
+import uuid
 from datetime import datetime
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -8,11 +9,11 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationsh
 
 class Profile(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    userId: int = Field(index=True)
+    user_id: str = Field(index=True)
 
 
 class Post(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
+    id: str | None = Field(default=None, primary_key=True)
     text: str | None
     favorite_count: int
     retweet_count: int
@@ -22,10 +23,10 @@ class Post(SQLModel, table=True):
 
 
 class Reply(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
+    id: str | None = Field(default=None, primary_key=True)
     text: str
 
-    postId: int | None = Field(default=None, foreign_key="post.id")
+    post_id: str | None = Field(default=None, foreign_key="post.id")
     post: Post = Relationship(back_populates="replies")
 
 
@@ -89,13 +90,13 @@ headers = {
 
 def params_factory(user_id, tweet_id, is_profile=True):
     params_profile = {
-        'variables': '{"userId":"{user}","count":100,"includePromotedContent":true,"withQuickPromoteEligibilityTweetFields":true,"withVoice":true,"withV2Timeline":true}'.format(user=user_id),
+        'variables': f'{{"userId":"{user_id}","count":100,"includePromotedContent":true,"withQuickPromoteEligibilityTweetFields":true,"withVoice":true,"withV2Timeline":true}}',
         'features': '{"profile_label_improvements_pcf_label_in_post_enabled":false,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"premium_content_api_read_enabled":false,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"responsive_web_grok_analyze_button_fetch_trends_enabled":false,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_enhance_cards_enabled":false}',
         'fieldToggles': '{"withArticlePlainText":false}',
     }
 
     params_tweet = {
-        'variables': '{"focalTweetId":"{tweet}","with_rux_injections":false,"rankingMode":"Relevance","includePromotedContent":true,"withCommunity":true,"withQuickPromoteEligibilityTweetFields":true,"withBirdwatchNotes":true,"withVoice":true}'.format(tweet=tweet_id),
+        'variables': f'{{"focalTweetId":"{tweet_id}","with_rux_injections":false,"rankingMode":"Relevance","includePromotedContent":true,"withCommunity":true,"withQuickPromoteEligibilityTweetFields":true,"withBirdwatchNotes":true,"withVoice":true}}',
         'features': '{"profile_label_improvements_pcf_label_in_post_enabled":false,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"premium_content_api_read_enabled":false,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"responsive_web_grok_analyze_button_fetch_trends_enabled":true,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_enhance_cards_enabled":false}',
         'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',
     }
@@ -108,7 +109,10 @@ def scrape(session: Session):
     profiles = session.exec(select(Profile)).all()
 
     for profile in profiles:
-        params = params_factory(profile.userId, None, True)
+        test_id = '442918531'
+        params = params_factory(test_id, '', True)
+
+        # params = params_factory(profile.user_id, '', True)
 
         tweets = requests.get(
             'https://api.x.com/graphql/TK4W-Bktk8AJk0L1QZnkrg/UserTweets',
@@ -116,6 +120,8 @@ def scrape(session: Session):
             cookies=cookies,
             headers=headers,
         )
+
+        # print(profile.user_id, tweets.json())
 
         for entry in tweets.json()["data"]["user"]["result"]["timeline_v2"]["timeline"]["instructions"][1]["entries"]:
             try:
@@ -127,11 +133,11 @@ def scrape(session: Session):
                 favorited = int(data["favorite_count"])
                 created_at = data["created_at"]
 
-                tweet_id = data["rest_id"]
+                tweet_id = data["id_str"]
 
-                tweet_params = params_factory(None, tweet_id, False)
+                tweet_params = params_factory('', tweet_id, False)
 
-                replies = requests.get(
+                reply_data = requests.get(
                     'https://x.com/i/api/graphql/iP4-On5YPLPgO9mjKRb2Gg/TweetDetail',
                     params=tweet_params,
                     cookies=cookies,
@@ -139,19 +145,35 @@ def scrape(session: Session):
                 )
 
                 replies = []
-                for reply in reply.json()["data"]["user"]["result"]["timeline_v2"]["timeline"]["instructions"][1]["entries"]:
-                    # TODO: might need some processing here to remove the username from the start of the reply
-                    reply_text = reply["item"]["itemContent"]["tweet_results"]["result"]["legacy"]["full_text"]
-                    replies.append(Reply(text=reply_text, postId=tweet_id))
+                try:
+                    r = reply_data.json()[
+                        "data"]['threaded_conversation_with_injections_v2']['instructions'][0]['entries'][1:]
 
-                post = Post(text=full_text, favorite_count=favorited,
+                    try:
+                        for reply in r:
+                            # TODO: might need some processing here to remove the username from the start of the reply
+                            reply_text = reply["content"]['items'][0]['item']['itemContent'][
+                                'tweet_results']['result']['legacy']['full_text']
+                            replies.append(
+                                Reply(id=uuid.uuid4(), text=reply_text, post_id=tweet_id))
+                            print(reply_text)
+                    except Exception:
+                        pass
+
+                except Exception as ex:
+                    print(f'Exception Reply: {str(ex)}')
+
+                post = Post(id=uuid.uuid4(), text=full_text, favorite_count=favorited,
                             retweet_count=repost + comments, created_at=created_at, replies=replies)
 
                 session.add(post)
 
                 session.commit()
-            except:
-                print(None)
+            except Exception as ex:
+                print(f"Exception: {str(ex)}")
+
+            # TODO: Only doing one iteration for development, remove later
+            break
     return True
 
 
