@@ -1,11 +1,13 @@
 import psycopg2
 import pandas as pd
+import uuid
+import psycopg2.extras
 
-df = pd.read_csv('data_unprocessed.csv')
+psycopg2.extras.register_uuid()
 
-df = df[df.id != 'Account Does Not Exist']
+df = pd.read_csv('ids.csv')
 
-ids = [d for d in df['id'].to_list() if len(d) >= len('264774923225026560')]
+ids = df["user_id"].to_list()
 
 conn = psycopg2.connect(database="ciceroni",
                         host="88.99.191.92",
@@ -16,7 +18,7 @@ conn = psycopg2.connect(database="ciceroni",
 
 cursor = conn.cursor()
 
-rows = [(i, int(id_)) for i, id_ in enumerate(ids)]
+rows = [(uuid.uuid4(), id_) for id_ in ids]
 query = "INSERT INTO profile(id, user_id) VALUES (%s, %s);"
 cursor.executemany(query, rows)
 

@@ -8,8 +8,11 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationsh
 
 
 class Profile(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
+    id: str | None = Field(default=None, primary_key=True)
     user_id: str = Field(index=True)
+    username: str | None
+
+    posts: list["Post"] = Relationship(back_populates="profile")
 
 
 class Post(SQLModel, table=True):
@@ -18,6 +21,9 @@ class Post(SQLModel, table=True):
     favorite_count: int
     retweet_count: int
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True)))
+
+    profile_id: str = Field(default=None, foreign_key="profile.id")
+    profile: Profile = Relationship(back_populates="posts")
 
     replies: list["Reply"] = Relationship(back_populates="post")
 
@@ -108,12 +114,8 @@ def scrape(session: Session):
     print('scraping...')
     profiles = session.exec(select(Profile)).all()
 
-    # TODO: for testing, remove later
-    for profile in range(1):
-        test_id = '442918531'
-        params = params_factory(test_id, '', True)
-
-        # params = params_factory(profile.user_id, '', True)
+    for i, profile in enumerate(profiles):
+        params = params_factory(profile.user_id, '', True)
 
         tweets = requests.get(
             'https://api.x.com/graphql/TK4W-Bktk8AJk0L1QZnkrg/UserTweets',
@@ -121,8 +123,6 @@ def scrape(session: Session):
             cookies=cookies,
             headers=headers,
         )
-
-        # print(profile.user_id, tweets.json())
 
         for entry in tweets.json()["data"]["user"]["result"]["timeline_v2"]["timeline"]["instructions"][1]["entries"]:
             try:
@@ -135,8 +135,6 @@ def scrape(session: Session):
                 created_at = data["created_at"]
 
                 tweet_id = data["id_str"]
-
-                print(tweet_id)
 
                 tweet_params = params_factory('', tweet_id, False)
 
@@ -151,8 +149,6 @@ def scrape(session: Session):
                 try:
                     r = reply_data.json()[
                         "data"]['threaded_conversation_with_injections_v2']['instructions'][0]['entries'][1:]
-
-                    print('Length of replies: ', len(r))
 
                     try:
                         for reply in r:
@@ -169,7 +165,7 @@ def scrape(session: Session):
                     print(f'Exception Reply: {str(ex)}')
 
                 post = Post(id=uuid.uuid4(), text=full_text, favorite_count=favorited,
-                            retweet_count=repost + comments, created_at=created_at, replies=replies)
+                            retweet_count=repost + comments, created_at=created_at, profile_id=profile.id, replies=replies)
 
                 session.add(post)
 
@@ -177,8 +173,7 @@ def scrape(session: Session):
             except Exception as ex:
                 print(f"Exception: {str(ex)}")
 
-            # TODO: Only doing one iteration for development, remove later
-            break
+        print(f"Profile {i} / {len(profiles)}.")
     return True
 
 
