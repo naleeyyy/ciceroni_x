@@ -108,7 +108,8 @@ def scrape(session: Session):
     print('scraping...')
     profiles = session.exec(select(Profile)).all()
 
-    for profile in profiles:
+    # TODO: for testing, remove later
+    for profile in range(1):
         test_id = '442918531'
         params = params_factory(test_id, '', True)
 
@@ -135,6 +136,8 @@ def scrape(session: Session):
 
                 tweet_id = data["id_str"]
 
+                print(tweet_id)
+
                 tweet_params = params_factory('', tweet_id, False)
 
                 reply_data = requests.get(
@@ -149,6 +152,8 @@ def scrape(session: Session):
                     r = reply_data.json()[
                         "data"]['threaded_conversation_with_injections_v2']['instructions'][0]['entries'][1:]
 
+                    print('Length of replies: ', len(r))
+
                     try:
                         for reply in r:
                             # TODO: might need some processing here to remove the username from the start of the reply
@@ -156,7 +161,7 @@ def scrape(session: Session):
                                 'tweet_results']['result']['legacy']['full_text']
                             replies.append(
                                 Reply(id=uuid.uuid4(), text=reply_text, post_id=tweet_id))
-                            print(reply_text)
+                            # print(reply_text)
                     except Exception:
                         pass
 
